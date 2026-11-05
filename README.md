@@ -104,6 +104,8 @@ Your backups are kept.
 - **The icon opens nothing**: your terminal may not be supported; reinstall with `STA_TERMINAL=<command>`.
 - **The icon does not show up**: log out and in again.
 
+Prefer a ready-made archive? Download `switch2android.tar.gz` from the [Releases](https://github.com/dzerox03/sta-linux/releases) page.
+
 ---
 
 # Bahasa Indonesia
@@ -211,3 +213,5 @@ Backup Anda tetap disimpan.
 - **"Not an Android boot image"**: file itu bukan boot image; ambil `boot.img` dari paket firmware Anda.
 - **Ikon tidak membuka apa pun**: terminal Anda mungkin tidak didukung; pasang ulang dengan `STA_TERMINAL=<perintah>`.
 - **Ikon tidak muncul**: logout lalu login lagi.
+
+Lebih suka arsip siap pakai? Unduh `switch2android.tar.gz` dari halaman [Releases](https://github.com/dzerox03/sta-linux/releases).
