@@ -53,6 +53,8 @@ sudo sta-linux -d
 
 Open your app menu and start **Switch2Android**.
 
+<p align="center"><img src="docs/gui.png" alt="Switch2Android GUI window" width="360"></p>
+
 **GUI window** (default when the GUI dependencies are installed): choose the boot image and slot, press **Check target** to see which partition will be overwritten, then **Switch to Android**, confirm, and enter your password. When the output shows `Verification OK`, the device reboots into Android. Backups are off by default, as in the terminal launcher; turn on *Back up the old partition* to save them to `~/sta-backup/`.
 
 **Terminal launcher** (`--cli`, or when the GUI is not available): press any key, enter your password. When you see `Verification OK`, the device reboots into Android. Close the window before pressing a key to cancel.
@@ -166,6 +168,8 @@ sudo sta-linux -d
 ## Pemakaian
 
 Buka menu aplikasi dan jalankan **Switch2Android**.
+
+<p align="center"><img src="docs/gui.png" alt="Jendela GUI Switch2Android" width="360"></p>
 
 **Jendela GUI** (bawaan jika kebutuhan GUI terpasang): pilih boot image dan slot, tekan **Cek target** untuk melihat partisi yang akan ditimpa, lalu **Pindah ke Android**, konfirmasi, dan masukkan password. Saat keluaran menampilkan `Verification OK`, perangkat reboot ke Android. Backup mati secara bawaan, seperti peluncur terminal; nyalakan *Backup partisi lama* untuk menyimpannya ke `~/sta-backup/`.
 
