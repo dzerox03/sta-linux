@@ -1,6 +1,6 @@
 #!/bin/bash
 # Switch2Android installer / pemasang Switch2Android
-# Installs sta-linux + a "Switch2Android" launcher in the GNOME/KDE/... app menu.
+# Installs sta-linux + a "Switch2Android" launcher (GUI window, or terminal) in the app menu.
 # Run as a normal user (it asks for sudo when needed).
 
 set -euo pipefail
@@ -29,23 +29,26 @@ usage() {
   --slot a|b|both   force the slot to flash (default: detect the active slot)
   --lang en|id      installer/launcher language
   --no-backup       skip backing up your boot partitions
+  --cli             use the terminal launcher instead of the GUI window
   -y, --yes         answer yes to all questions
   --uninstall       remove Switch2Android
   -h, --help        this help" "Pemakaian: bash install.sh [opsi] [/jalur/ke/boot.img]
   --slot a|b|both   paksa slot yang di-flash (bawaan: deteksi slot aktif)
   --lang en|id      bahasa pemasang/peluncur
   --no-backup       lewati backup partisi boot
+  --cli             pakai peluncur terminal, bukan jendela GUI
   -y, --yes         jawab ya untuk semua pertanyaan
   --uninstall       hapus Switch2Android
   -h, --help        bantuan ini"
 }
 
-IMG=""; SLOT=""; DO_BACKUP=1; UNINSTALL=0; ASSUME_YES=0
+IMG=""; SLOT=""; DO_BACKUP=1; UNINSTALL=0; ASSUME_YES=0; USE_CLI=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --slot) [ $# -ge 2 ] || die "--slot"; SLOT="$2"; shift 2 ;;
     --lang) [ $# -ge 2 ] || die "--lang"; L="$2"; shift 2 ;;
     --no-backup) DO_BACKUP=0; shift ;;
+    --cli) USE_CLI=1; shift ;;
     -y|--yes) ASSUME_YES=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -59,7 +62,7 @@ if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
 
 # ---- uninstall
 if [ "$UNINSTALL" -eq 1 ]; then
-  $SUDO rm -f "$PREFIX/bin/sta-linux" "$PREFIX/bin/sta-android"
+  $SUDO rm -f "$PREFIX/bin/sta-linux" "$PREFIX/bin/sta-android" "$PREFIX/bin/sta-gui"
   $SUDO rm -rf "$PREFIX/share/sta"
   rm -f "$APPS/switch2android.desktop" "$ICONS/switch2android.png"
   command -v update-desktop-database >/dev/null && update-desktop-database "$APPS" 2>/dev/null || true
@@ -87,6 +90,17 @@ IMG="${IMG/#\~/$HOME}"
 [ -f "$IMG" ] || die "$(t "File not found" "File tidak ditemukan"): $IMG"
 [ "$(head -c 8 "$IMG")" = "ANDROID!" ] || die "$(t "That is not an Android boot image." "Itu bukan boot image Android.")"
 
+# ---- GUI (needs python-gobject, GTK4, libadwaita and polkit's pkexec)
+GUI=0
+if [ "$USE_CLI" -eq 0 ] && [ -f "$HERE/sta-gui" ] \
+   && command -v pkexec >/dev/null \
+   && python3 -c "import gi; gi.require_version('Gtk','4.0'); gi.require_version('Adw','1')" 2>/dev/null; then
+  GUI=1
+elif [ "$USE_CLI" -eq 0 ]; then
+  t "GUI not available (needs sta-gui, python-gobject, gtk4, libadwaita, polkit). Using the terminal launcher." \
+    "GUI tidak tersedia (perlu sta-gui, python-gobject, gtk4, libadwaita, polkit). Memakai peluncur terminal."
+fi
+
 # ---- terminal
 TERM_CMD="${STA_TERMINAL:-}"
 if [ -z "$TERM_CMD" ]; then
@@ -94,12 +108,16 @@ if [ -z "$TERM_CMD" ]; then
     command -v "$c" >/dev/null && { TERM_CMD="$c"; break; }
   done
 fi
-[ -n "$TERM_CMD" ] || die "$(t "No terminal emulator found. Set STA_TERMINAL=<command> and run again." "Terminal tidak ditemukan. Atur STA_TERMINAL=<perintah> lalu jalankan lagi.")"
-case "$TERM_CMD" in
-  gnome-terminal) EXEC="gnome-terminal -- $PREFIX/bin/sta-android" ;;
-  kitty)          EXEC="kitty $PREFIX/bin/sta-android" ;;
-  *)              EXEC="$TERM_CMD -e $PREFIX/bin/sta-android" ;;
-esac
+if [ "$GUI" -eq 1 ]; then
+  EXEC="env STA_SLOT=${SLOT:-auto} $PREFIX/bin/sta-gui"
+else
+  [ -n "$TERM_CMD" ] || die "$(t "No terminal emulator found. Set STA_TERMINAL=<command> and run again." "Terminal tidak ditemukan. Atur STA_TERMINAL=<perintah> lalu jalankan lagi.")"
+  case "$TERM_CMD" in
+    gnome-terminal) EXEC="gnome-terminal -- $PREFIX/bin/sta-android" ;;
+    kitty)          EXEC="kitty $PREFIX/bin/sta-android" ;;
+    *)              EXEC="$TERM_CMD -e $PREFIX/bin/sta-android" ;;
+  esac
+fi
 
 # ---- which partition will be overwritten?
 echo
@@ -133,6 +151,7 @@ fi
 # ---- install files
 $SUDO install -Dm755 "$HERE/sta-linux.sh" "$PREFIX/bin/sta-linux"
 $SUDO install -Dm644 "$IMG" "$PREFIX/share/sta/boot.img"
+[ "$GUI" -eq 1 ] && $SUDO install -Dm755 "$HERE/sta-gui" "$PREFIX/bin/sta-gui"
 install -Dm644 "$HERE/sta.png" "$ICONS/switch2android.png"
 
 LAUNCHER=$(mktemp)

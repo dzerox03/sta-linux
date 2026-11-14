@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+"""Switch2Android GUI: a GTK4/libadwaita front end for the sta-linux command."""
+import getpass
+import os
+import re
+import shutil
+import subprocess
+import sys
+import threading
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Adw, GLib, Gtk  # noqa: E402
+
+STA = shutil.which("sta-linux") or "/usr/local/bin/sta-linux"
+DEFAULT_IMG = "/usr/local/share/sta/boot.img"
+ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+_lang = os.environ.get("STA_LANG") or os.environ.get("LC_ALL") or os.environ.get("LANG", "")
+LANG = "id" if _lang.startswith("id") else "en"
+SLOT_INDEX = {"auto": 0, "a": 1, "b": 2, "both": 3}
+
+TXT = {
+    "en": {
+        "title": "Switch2Android",
+        "image": "Android boot image",
+        "choose": "Choose…",
+        "pick": "Select boot.img",
+        "slot": "Boot slot",
+        "slots": ["Automatic (active slot)", "Slot A", "Slot B", "Both A and B"],
+        "target": "Target partition",
+        "unknown": "Not checked yet",
+        "opts": "Options",
+        "backup": "Back up the old partition",
+        "backup_s": "Saved to ~/sta-backup before it is overwritten",
+        "noreboot": "Do not reboot afterwards",
+        "poweroff": "Power off instead of reboot",
+        "full": "Full flash",
+        "full_s": "Write the whole file, skip header parsing",
+        "check": "Check target",
+        "go": "Switch to Android",
+        "log": "Output",
+        "warn_h": "Overwrite the boot partition?",
+        "warn_b": "This writes your Android boot.img to the boot partition and "
+                  "reboots the device. A wrong slot or a wrong boot.img can leave "
+                  "the device unable to boot. Make sure you can reach fastboot.",
+        "warn_t": "Target: {}",
+        "warn_u": "The target has not been checked. Press Cancel and use “Check target” first if unsure.",
+        "cancel": "Cancel",
+        "flash": "Flash and continue",
+        "missing": "sta-linux was not found. Install it first with install.sh.",
+        "noimg": "Boot image not found: ",
+        "auth": "Authentication was cancelled or denied.",
+        "done": "Finished (exit code {})",
+    },
+    "id": {
+        "title": "Switch2Android",
+        "image": "Boot image Android",
+        "choose": "Pilih…",
+        "pick": "Pilih boot.img",
+        "slot": "Slot boot",
+        "slots": ["Otomatis (slot aktif)", "Slot A", "Slot B", "A dan B"],
+        "target": "Partisi target",
+        "unknown": "Belum dicek",
+        "opts": "Opsi",
+        "backup": "Backup partisi lama",
+        "backup_s": "Disimpan di ~/sta-backup sebelum ditimpa",
+        "noreboot": "Jangan reboot setelahnya",
+        "poweroff": "Matikan perangkat, bukan reboot",
+        "full": "Flash penuh",
+        "full_s": "Tulis seluruh file, lewati pembacaan header",
+        "check": "Cek target",
+        "go": "Pindah ke Android",
+        "log": "Keluaran",
+        "warn_h": "Timpa partisi boot?",
+        "warn_b": "Ini menulis boot.img Android ke partisi boot lalu me-reboot "
+                  "perangkat. Slot atau boot.img yang salah bisa membuat perangkat "
+                  "tidak bisa boot. Pastikan Anda bisa masuk fastboot.",
+        "warn_t": "Target: {}",
+        "warn_u": "Target belum dicek. Tekan Batal dan pakai “Cek target” dulu jika ragu.",
+        "cancel": "Batal",
+        "flash": "Flash dan lanjutkan",
+        "missing": "sta-linux tidak ditemukan. Pasang dulu dengan install.sh.",
+        "noimg": "Boot image tidak ditemukan: ",
+        "auth": "Autentikasi dibatalkan atau ditolak.",
+        "done": "Selesai (kode keluar {})",
+    },
+}[LANG]
+
+
+class Win(Adw.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app, title=TXT["title"],
+                         default_width=480, default_height=720)
+        self.img = DEFAULT_IMG
+        self.target = None
+        self.busy = False
+
+        view = Adw.ToolbarView()
+        view.add_top_bar(Adw.HeaderBar())
+        self.set_content(view)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
+                      margin_top=12, margin_bottom=16, margin_start=16, margin_end=16)
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        scroll.set_child(box)
+        view.set_content(scroll)
+
+        # Boot image, slot, target
+        g1 = Adw.PreferencesGroup()
+        self.img_row = Adw.ActionRow(title=TXT["image"], subtitle=self.img)
+        self.img_row.set_subtitle_selectable(True)
+        btn = Gtk.Button(label=TXT["choose"], valign=Gtk.Align.CENTER)
+        btn.connect("clicked", self.on_choose)
+        self.img_row.add_suffix(btn)
+        g1.add(self.img_row)
+
+        self.slot_row = Adw.ComboRow(title=TXT["slot"],
+                                     model=Gtk.StringList.new(TXT["slots"]))
+        self.slot_row.set_selected(SLOT_INDEX.get(os.environ.get("STA_SLOT", "auto"), 0))
+        self.slot_row.connect("notify::selected", lambda *_: self.set_target(None))
+        g1.add(self.slot_row)
+
+        self.target_row = Adw.ActionRow(title=TXT["target"], subtitle=TXT["unknown"])
+        g1.add(self.target_row)
+        box.append(g1)
+
+        # Options (defaults follow the original launcher: sta-linux -q -B)
+        g2 = Adw.PreferencesGroup(title=TXT["opts"])
+        self.sw_backup = Adw.SwitchRow(title=TXT["backup"], subtitle=TXT["backup_s"])
+        self.sw_noreboot = Adw.SwitchRow(title=TXT["noreboot"])
+        self.sw_poweroff = Adw.SwitchRow(title=TXT["poweroff"])
+        self.sw_full = Adw.SwitchRow(title=TXT["full"], subtitle=TXT["full_s"])
+        for r in (self.sw_backup, self.sw_noreboot, self.sw_poweroff, self.sw_full):
+            g2.add(r)
+        box.append(g2)
+
+        # Buttons
+        row = Gtk.Box(spacing=12, homogeneous=True)
+        self.b_check = Gtk.Button(label=TXT["check"])
+        self.b_check.connect("clicked", lambda *_: self.run(check=True))
+        self.b_go = Gtk.Button(label=TXT["go"])
+        self.b_go.add_css_class("destructive-action")
+        self.b_go.add_css_class("pill")
+        self.b_go.connect("clicked", self.on_go)
+        row.append(self.b_check)
+        row.append(self.b_go)
+        box.append(row)
+
+        # Log
+        box.append(Gtk.Label(label=TXT["log"], xalign=0, css_classes=["heading"]))
+        self.buf = Gtk.TextBuffer()
+        self.tv = Gtk.TextView(buffer=self.buf, editable=False, monospace=True,
+                               wrap_mode=Gtk.WrapMode.WORD_CHAR, top_margin=8,
+                               bottom_margin=8, left_margin=8, right_margin=8)
+        frame = Gtk.ScrolledWindow(min_content_height=200, vexpand=True)
+        frame.add_css_class("card")
+        frame.set_child(self.tv)
+        box.append(frame)
+
+    # ---------- helpers ----------
+    def log(self, text):
+        self.buf.insert(self.buf.get_end_iter(), text)
+        mark = self.buf.create_mark(None, self.buf.get_end_iter(), False)
+        self.tv.scroll_mark_onscreen(mark)
+        return False
+
+    def set_busy(self, busy):
+        self.busy = busy
+        self.b_check.set_sensitive(not busy)
+        self.b_go.set_sensitive(not busy)
+        return False
+
+    def set_target(self, target):
+        self.target = target
+        self.target_row.set_subtitle(target or TXT["unknown"])
+        return False
+
+    def args(self, check):
+        a = ["-p", self.img]
+        slot = self.slot_row.get_selected()
+        if slot == 1:
+            a += ["-a"]
+        elif slot == 2:
+            a += ["-b"]
+        elif slot == 3:
+            a += ["-a", "-b"]
+        if check:
+            return a + ["-d"]
+        if not self.sw_backup.get_active():
+            a.append("-B")
+        if self.sw_full.get_active():
+            a.append("-f")
+        if self.sw_poweroff.get_active():
+            a.append("-s")
+        elif self.sw_noreboot.get_active():
+            a.append("-n")
+        return a + ["-q"]  # -q: this window does the confirming
+
+    # ---------- actions ----------
+    def on_choose(self, _btn):
+        dlg = Gtk.FileDialog(title=TXT["pick"])
+        dlg.open(self, None, self.on_chosen)
+
+    def on_chosen(self, dlg, res):
+        try:
+            f = dlg.open_finish(res)
+        except GLib.Error:
+            return
+        self.img = f.get_path()
+        self.img_row.set_subtitle(self.img)
+
+    def on_go(self, _btn):
+        extra = TXT["warn_t"].format(self.target) if self.target else TXT["warn_u"]
+        body = TXT["warn_b"] + "\n\n" + extra
+        new = hasattr(Adw, "AlertDialog")
+        if new:
+            d = Adw.AlertDialog(heading=TXT["warn_h"], body=body)
+        else:
+            d = Adw.MessageDialog(transient_for=self, heading=TXT["warn_h"], body=body)
+        d.add_response("cancel", TXT["cancel"])
+        d.add_response("go", TXT["flash"])
+        d.set_response_appearance("go", Adw.ResponseAppearance.DESTRUCTIVE)
+        d.set_default_response("cancel")
+        d.set_close_response("cancel")
+        d.connect("response", lambda _d, r: self.run(check=False) if r == "go" else None)
+        d.present(self) if new else d.present()
+
+    def run(self, check):
+        if self.busy:
+            return
+        if not os.path.exists(STA):
+            self.log(TXT["missing"] + "\n")
+            return
+        if not check and not os.path.isfile(self.img):
+            self.log(TXT["noimg"] + self.img + "\n")
+            return
+        # pkexec drops the environment; SUDO_USER makes sta-linux save backups in
+        # the user's home (~/sta-backup) instead of /root.
+        cmd = ["pkexec", "env", f"SUDO_USER={getpass.getuser()}", STA] + self.args(check)
+        self.buf.set_text("$ " + " ".join(cmd[3:]) + "\n")
+        self.set_busy(True)
+        threading.Thread(target=self.worker, args=(cmd, check), daemon=True).start()
+
+    def worker(self, cmd, check):
+        try:
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                 stdin=subprocess.DEVNULL, text=True, bufsize=1,
+                                 errors="replace")
+            for raw in p.stdout:
+                line = ANSI.sub("", raw)
+                GLib.idle_add(self.log, line)
+                if check and line.startswith("Would flash:"):
+                    GLib.idle_add(self.set_target, line.split(":", 1)[1].strip())
+            code = p.wait()
+        except Exception as e:  # noqa: BLE001
+            GLib.idle_add(self.log, f"{e}\n")
+            code = -1
+        if code in (126, 127):
+            GLib.idle_add(self.log, TXT["auth"] + "\n")
+        GLib.idle_add(self.log, TXT["done"].format(code) + "\n")
+        GLib.idle_add(self.set_busy, False)
+
+
+class App(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id="io.github.dzerox03.StaGui")
+
+    def do_activate(self):
+        (self.props.active_window or Win(self)).present()
+
+
+if __name__ == "__main__":
+    sys.exit(App().run(sys.argv))

@@ -23,6 +23,7 @@ The active slot is read from the GPT partition attributes, as in the original to
 ## Requirements
 
 - Linux with `bash`, `dd`, `sha256sum`, `blockdev`, `od`, `sudo` (all standard) and a terminal emulator (`kgx`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `alacritty`, `kitty` or `xterm`).
+- Optional, for the GUI window: `python-gobject`, `gtk4`, `libadwaita` and `polkit` (on Arch: `sudo pacman -S python-gobject gtk4 libadwaita polkit`). Without them the installer falls back to the terminal launcher.
 - The `boot.img` of the Android version **installed on your device**, from your own firmware package. Do not use a `boot.img` from another device or version, and do not share yours: it is tied to your device and your firmware.
 
 ## Install
@@ -40,7 +41,7 @@ The installer will:
 3. back up your boot partitions to `~/sta-backup/`,
 4. install the program and add **Switch2Android** to your app menu.
 
-Options: `--slot a|b|both`, `--lang en|id`, `--no-backup`, `-y`, `--uninstall`. If your terminal is not detected, run `STA_TERMINAL=<command> bash install.sh ...`.
+Options: `--slot a|b|both`, `--lang en|id`, `--no-backup`, `--cli`, `-y`, `--uninstall`. If your terminal is not detected, run `STA_TERMINAL=<command> bash install.sh ...`.
 
 Check what would be flashed at any time (changes nothing):
 
@@ -50,7 +51,11 @@ sudo sta-linux -d
 
 ## Use
 
-Open your app menu, start **Switch2Android**, press any key, enter your password. When you see `Verification OK`, the device reboots into Android. Close the window before pressing a key to cancel.
+Open your app menu and start **Switch2Android**.
+
+**GUI window** (default when the GUI dependencies are installed): choose the boot image and slot, press **Check target** to see which partition will be overwritten, then **Switch to Android**, confirm, and enter your password. When the output shows `Verification OK`, the device reboots into Android. Backups are off by default, as in the terminal launcher; turn on *Back up the old partition* to save them to `~/sta-backup/`.
+
+**Terminal launcher** (`--cli`, or when the GUI is not available): press any key, enter your password. When you see `Verification OK`, the device reboots into Android. Close the window before pressing a key to cancel.
 
 To go back to Linux, use [WOA Helper](https://github.com/n00b69/woa-helper) from Android as usual.
 
@@ -101,10 +106,9 @@ Your backups are kept.
 
 - **"No active boot partition found"**: run `bash install.sh --slot a` (or `b`).
 - **"Not an Android boot image"**: the file is not a boot image; get `boot.img` from your firmware package.
-- **The icon opens nothing**: your terminal may not be supported; reinstall with `STA_TERMINAL=<command>`.
+- **The icon opens nothing**: your terminal may not be supported; reinstall with `STA_TERMINAL=<command>`. For the GUI, run `sta-gui` in a terminal to see the error.
+- **The GUI is not used**: install the optional GUI dependencies, then run `bash install.sh` again (or use `--cli` to force the terminal launcher).
 - **The icon does not show up**: log out and in again.
-
-Prefer a ready-made archive? Download `switch2android.tar.gz` from the [Releases](https://github.com/dzerox03/sta-linux/releases) page.
 
 ---
 
@@ -133,6 +137,7 @@ Slot aktif dibaca dari atribut partisi GPT, seperti alat aslinya. Kalau ada part
 ## Kebutuhan
 
 - Linux dengan `bash`, `dd`, `sha256sum`, `blockdev`, `od`, `sudo` (semuanya standar) dan emulator terminal (`kgx`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `alacritty`, `kitty` atau `xterm`).
+- Opsional, untuk jendela GUI: `python-gobject`, `gtk4`, `libadwaita` dan `polkit` (di Arch: `sudo pacman -S python-gobject gtk4 libadwaita polkit`). Tanpa semuanya, pemasang memakai peluncur terminal.
 - `boot.img` dari versi Android yang **terpasang di perangkat Anda**, diambil dari paket firmware Anda sendiri. Jangan pakai `boot.img` dari perangkat atau versi lain, dan jangan bagikan milik Anda: file itu terikat pada perangkat dan firmware Anda.
 
 ## Pemasangan
@@ -150,7 +155,7 @@ Pemasang akan:
 3. mem-backup partisi boot Anda ke `~/sta-backup/`,
 4. memasang program dan menambahkan **Switch2Android** ke menu aplikasi.
 
-Opsi: `--slot a|b|both`, `--lang en|id`, `--no-backup`, `-y`, `--uninstall`. Kalau terminal Anda tidak terdeteksi, jalankan `STA_TERMINAL=<perintah> bash install.sh ...`.
+Opsi: `--slot a|b|both`, `--lang en|id`, `--no-backup`, `--cli`, `-y`, `--uninstall`. Kalau terminal Anda tidak terdeteksi, jalankan `STA_TERMINAL=<perintah> bash install.sh ...`.
 
 Cek apa yang akan di-flash kapan saja (tidak mengubah apa pun):
 
@@ -160,7 +165,11 @@ sudo sta-linux -d
 
 ## Pemakaian
 
-Buka menu aplikasi, jalankan **Switch2Android**, tekan tombol apa saja, masukkan password. Saat muncul `Verification OK`, perangkat reboot ke Android. Tutup jendela sebelum menekan tombol untuk membatalkan.
+Buka menu aplikasi dan jalankan **Switch2Android**.
+
+**Jendela GUI** (bawaan jika kebutuhan GUI terpasang): pilih boot image dan slot, tekan **Cek target** untuk melihat partisi yang akan ditimpa, lalu **Pindah ke Android**, konfirmasi, dan masukkan password. Saat keluaran menampilkan `Verification OK`, perangkat reboot ke Android. Backup mati secara bawaan, seperti peluncur terminal; nyalakan *Backup partisi lama* untuk menyimpannya ke `~/sta-backup/`.
+
+**Peluncur terminal** (`--cli`, atau saat GUI tidak tersedia): tekan tombol apa saja, masukkan password. Saat muncul `Verification OK`, perangkat reboot ke Android. Tutup jendela sebelum menekan tombol untuk membatalkan.
 
 Untuk kembali ke Linux, pakai [WOA Helper](https://github.com/n00b69/woa-helper) dari Android seperti biasa.
 
@@ -211,7 +220,6 @@ Backup Anda tetap disimpan.
 
 - **"No active boot partition found"**: jalankan `bash install.sh --slot a` (atau `b`).
 - **"Not an Android boot image"**: file itu bukan boot image; ambil `boot.img` dari paket firmware Anda.
-- **Ikon tidak membuka apa pun**: terminal Anda mungkin tidak didukung; pasang ulang dengan `STA_TERMINAL=<perintah>`.
+- **Ikon tidak membuka apa pun**: terminal Anda mungkin tidak didukung; pasang ulang dengan `STA_TERMINAL=<perintah>`. Untuk GUI, jalankan `sta-gui` di terminal untuk melihat galatnya.
+- **GUI tidak dipakai**: pasang kebutuhan GUI opsional, lalu jalankan `bash install.sh` lagi (atau pakai `--cli` untuk memaksa peluncur terminal).
 - **Ikon tidak muncul**: logout lalu login lagi.
-
-Lebih suka arsip siap pakai? Unduh `switch2android.tar.gz` dari halaman [Releases](https://github.com/dzerox03/sta-linux/releases).
