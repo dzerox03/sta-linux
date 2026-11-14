@@ -175,6 +175,10 @@ main() {
       mkdir -p "$BK_DIR"
       BK="$BK_DIR/${T}-$(date +%Y%m%d-%H%M%S).img"
       dd if="$PART" of="$BK" bs=4M status=none
+      # running as root (sudo/pkexec): give the backups back to the real user
+      if [ -n "${SUDO_USER:-}" ]; then
+        chown "$SUDO_USER": "$BK_DIR" "$BK" 2>/dev/null || true
+      fi
       echo "Backup : $BK"
     else
       BK="(no backup)"
