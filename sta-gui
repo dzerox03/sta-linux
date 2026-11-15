@@ -93,7 +93,7 @@ TXT = {
 class Win(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title=TXT["title"],
-                         default_width=480, default_height=720)
+                         default_width=980, default_height=600)
         self.img = DEFAULT_IMG
         self.target = None
         self.busy = False
@@ -102,11 +102,19 @@ class Win(Adw.ApplicationWindow):
         view.add_top_bar(Adw.HeaderBar())
         self.set_content(view)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
-                      margin_top=12, margin_bottom=16, margin_start=16, margin_end=16)
-        scroll = Gtk.ScrolledWindow(vexpand=True)
+        # Left: settings and buttons. Right: command output.
+        root = Gtk.Box(spacing=16, margin_top=12, margin_bottom=16,
+                       margin_start=16, margin_end=16)
+        view.set_content(root)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16, width_request=420)
+        scroll = Gtk.ScrolledWindow(vexpand=True, propagate_natural_width=True,
+                                    hscrollbar_policy=Gtk.PolicyType.NEVER)
         scroll.set_child(box)
-        view.set_content(scroll)
+        root.append(scroll)
+
+        out = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, hexpand=True)
+        root.append(out)
 
         # Boot image, slot, target
         g1 = Adw.PreferencesGroup()
@@ -150,15 +158,16 @@ class Win(Adw.ApplicationWindow):
         box.append(row)
 
         # Log
-        box.append(Gtk.Label(label=TXT["log"], xalign=0, css_classes=["heading"]))
+        out.append(Gtk.Label(label=TXT["log"], xalign=0, css_classes=["heading"]))
         self.buf = Gtk.TextBuffer()
         self.tv = Gtk.TextView(buffer=self.buf, editable=False, monospace=True,
                                wrap_mode=Gtk.WrapMode.WORD_CHAR, top_margin=8,
                                bottom_margin=8, left_margin=8, right_margin=8)
-        frame = Gtk.ScrolledWindow(min_content_height=200, vexpand=True)
+        frame = Gtk.ScrolledWindow(min_content_width=320, min_content_height=200,
+                                   hexpand=True, vexpand=True)
         frame.add_css_class("card")
         frame.set_child(self.tv)
-        box.append(frame)
+        out.append(frame)
 
     # ---------- helpers ----------
     def log(self, text):
